@@ -1,0 +1,27 @@
+# ---- Maven / Java ----
+target/
+*.class
+*.jar
+*.war
+hs_err_pid*
+
+# ---- IDEs ----
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# ---- Sistema operativo ----
+.DS_Store
+Thumbs.db
+
+# ---- Logs y archivos temporales ----
+*.log
+*.tmp
+*.swp
+
+# ---- Variables locales con credenciales reales (nunca versionar) ----
+.env
+*.env

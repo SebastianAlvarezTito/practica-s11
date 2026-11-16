@@ -1,0 +1,74 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-webflux             # Nombre del Deployment.
+  namespace: practica-s11
+  labels:
+    app: backend-webflux
+    tier: backend
+spec:
+  replicas: 1                       # Una réplica (se puede escalar con: kubectl scale deployment/backend-webflux --replicas=2).
+  selector:
+    matchLabels:
+      app: backend-webflux          # Pods administrados por este Deployment.
+  template:
+    metadata:
+      labels:
+        app: backend-webflux        # DEBE coincidir con el selector del Deployment y del Service.
+        tier: backend
+    spec:
+      containers:
+        - name: backend-webflux
+          image: backend-webflux:1.0.0   # Imagen construida con el daemon Docker de Minikube.
+          imagePullPolicy: Never         # Nunca intentar descargarla de un registro: usa la imagen local (evita ImagePullBackOff).
+          ports:
+            - name: http            # Nombre simbólico usado por las sondas y por el Service.
+              containerPort: 8080   # Debe coincidir con APP_PORT del ConfigMap.
+          envFrom:                  # Carga TODAS las claves de las fuentes indicadas como variables de entorno.
+            - configMapRef:
+                name: app-config    # DB_HOST, DB_PORT, DB_NAME, APP_PORT (datos públicos).
+            - secretRef:
+                name: db-secret     # MONGO_INITDB_ROOT_USERNAME y MONGO_INITDB_ROOT_PASSWORD (datos confidenciales).
+          resources:
+            requests:
+              cpu: 250m             # CPU garantizada.
+              memory: 384Mi         # Memoria garantizada (la JVM necesita holgura).
+            limits:
+              cpu: "1"              # Tope de CPU (1 núcleo).
+              memory: 768Mi         # Tope de memoria; la JVM usa MaxRAMPercentage=75 (ver Dockerfile).
+          readinessProbe:          # Decide si el Pod recibe tráfico. /actuator/health incluye el estado de MongoDB.
+            httpGet:
+              path: /actuator/health    # Endpoint de Spring Boot Actuator.
+              port: http                # Puerto nombrado (8080).
+            initialDelaySeconds: 30 # La JVM + Spring tardan en arrancar.
+            periodSeconds: 10       # Frecuencia de la prueba.
+            timeoutSeconds: 3       # Tiempo máximo de respuesta.
+            failureThreshold: 3     # 3 fallos seguidos => Pod "No listo" (se retira del Service).
+          livenessProbe:           # Decide si el contenedor debe reiniciarse.
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 60 # Más holgado que readiness para no reiniciar durante el arranque.
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 6     # Umbral alto: evita reinicios en cadena si MongoDB tarda en estar disponible.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service             # Nombre del Service que se consulta con "minikube service".
+  namespace: practica-s11
+  labels:
+    app: backend-webflux
+    tier: backend
+spec:
+  type: NodePort                    # Expone el puerto en cada nodo del clúster para pruebas externas.
+  selector:
+    app: backend-webflux            # Dirige el tráfico a los Pods del backend.
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080                    # Puerto del Service dentro del clúster.
+      targetPort: http              # Puerto nombrado del contenedor (8080).
+      nodePort: 30011               # Puerto externo fijo dentro del rango válido 30000-32767.

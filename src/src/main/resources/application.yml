@@ -1,0 +1,42 @@
+# =============================================================================
+# application.yml - Configuración del backend
+# Todas las conexiones se leen de VARIABLES DE ENTORNO inyectadas por Kubernetes:
+#   ConfigMap "app-config": DB_HOST, DB_PORT, DB_NAME, APP_PORT
+#   Secret "db-secret":     MONGO_INITDB_ROOT_USERNAME, MONGO_INITDB_ROOT_PASSWORD
+# Sintaxis ${VARIABLE:valor_por_defecto}. Las credenciales NO tienen valor por
+# defecto: si faltan, la aplicación falla al iniciar (fail-fast) en vez de
+# arrancar con credenciales inseguras.
+# =============================================================================
+server:
+  port: ${APP_PORT:8080}                          # Puerto HTTP de Netty (ConfigMap: APP_PORT).
+  shutdown: graceful                              # Al recibir SIGTERM termina primero las peticiones en curso.
+
+spring:
+  application:
+    name: s11-backend-webflux                     # Nombre lógico de la aplicación.
+  lifecycle:
+    timeout-per-shutdown-phase: 20s               # Máximo de espera durante el apagado ordenado.
+  data:
+    mongodb:
+      host: ${DB_HOST:localhost}                  # Nombre DNS del Service de MongoDB (mongo-service).
+      port: ${DB_PORT:27017}                      # Puerto de MongoDB.
+      database: ${DB_NAME:inventario_db}          # Base de datos donde se guardan los documentos.
+      username: ${MONGO_INITDB_ROOT_USERNAME}     # Usuario root (viene del Secret).
+      password: ${MONGO_INITDB_ROOT_PASSWORD}     # Contraseña root (viene del Secret).
+      authentication-database: admin              # El usuario root creado por la imagen oficial vive en la BD "admin".
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info                      # Solo se exponen estos endpoints de Actuator.
+  endpoint:
+    health:
+      probes:
+        enabled: true                             # Habilita también /actuator/health/liveness y /readiness.
+      show-details: never                         # No revela detalles internos a clientes externos.
+
+logging:
+  level:
+    root: INFO
+    com.practica.s11: INFO

@@ -1,0 +1,8 @@
+apiVersion: v1                      # Versión de API para el recurso Namespace (core/v1).
+kind: Namespace                     # Tipo de recurso: espacio de nombres.
+metadata:
+  name: practica-s11                # Nombre EXACTO exigido por la guía del laboratorio.
+  labels:
+    app.kubernetes.io/part-of: practica-s11-persistencia     # Agrupa lógicamente el proyecto.
+    app.kubernetes.io/managed-by: kubectl                    # Indica que se gestiona con kubectl apply.
+    curso: orquestacion-y-automatizacion                     # Etiqueta informativa de la práctica.

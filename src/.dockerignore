@@ -1,0 +1,12 @@
+# Archivos que NO deben enviarse al daemon de Docker durante "docker build" (contexto más liviano y rápido).
+target/
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+*.log
+.env
+Dockerfile
+.dockerignore
+*.md

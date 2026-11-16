@@ -1,0 +1,93 @@
+
+apiVersion: apps/v1                 # API apps/v1: grupo de cargas de trabajo (Deployment).
+kind: Deployment                    # Tipo de recurso: despliegue gestionado (self-healing).
+metadata:
+  name: mongo                       # Nombre del Deployment.
+  namespace: practica-s11           # Namespace aislado del proyecto.
+  labels:
+    app: mongo
+    tier: database
+spec:
+  replicas: 1                       # Una sola instancia: MongoDB standalone con volumen RWO (no admite varios escritores).
+  strategy:
+    type: Recreate                  # Elimina el Pod viejo ANTES de crear el nuevo: evita que dos Pods peleen por el mismo volumen RWO.
+  selector:
+    matchLabels:
+      app: mongo                    # El Deployment administra los Pods que tengan esta etiqueta.
+  template:                         # Plantilla de los Pods que se crearán.
+    metadata:
+      labels:
+        app: mongo                  # DEBE coincidir con selector.matchLabels y con el selector del Service.
+        tier: database
+    spec:
+      containers:
+        - name: mongo               # Nombre del contenedor dentro del Pod.
+          image: mongo:7.0          # Imagen oficial de MongoDB (versión fijada, sin usar :latest).
+          ports:
+            - name: mongodb         # Nombre simbólico del puerto.
+              containerPort: 27017  # Puerto estándar de MongoDB.
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME   # Variable oficial: crea el usuario root en la primera inicialización.
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret                # Secret creado en 03-db-secret.yaml.
+                  key: MONGO_INITDB_ROOT_USERNAME  # Clave dentro del Secret (Kubernetes decodifica el Base64 automáticamente).
+            - name: MONGO_INITDB_ROOT_PASSWORD   # Variable oficial: contraseña del usuario root.
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MONGO_INITDB_ROOT_PASSWORD
+          volumeMounts:
+            - name: mongo-data      # Debe coincidir con el nombre declarado en "volumes" más abajo.
+              mountPath: /data/db   # Ruta estándar donde MongoDB guarda sus datos.
+          resources:
+            requests:
+              cpu: 250m             # CPU garantizada (0.25 núcleo).
+              memory: 256Mi         # Memoria garantizada.
+            limits:
+              cpu: 500m             # Tope de CPU.
+              memory: 512Mi         # Tope de memoria (si lo excede, el contenedor se reinicia por OOMKilled).
+          readinessProbe:           # ¿Está listo para recibir tráfico? Mientras falle, el Service no le envía conexiones.
+            exec:
+              command:
+                - mongosh
+                - --quiet
+                - --eval
+                - "db.adminCommand('ping').ok"   # El comando ping devuelve 1 si el servidor responde.
+            initialDelaySeconds: 20 # Espera 20 s tras el arranque (la primera inicialización crea el usuario root).
+            periodSeconds: 10       # Repite la prueba cada 10 s.
+            timeoutSeconds: 5       # Cada ejecución tiene 5 s para responder.
+            failureThreshold: 6     # Tolera 6 fallos seguidos antes de marcarlo "No listo".
+          livenessProbe:            # ¿Sigue vivo? Si falla repetidamente, Kubernetes reinicia el contenedor.
+            exec:
+              command:
+                - mongosh
+                - --quiet
+                - --eval
+                - "db.adminCommand('ping').ok"
+            initialDelaySeconds: 40 # Mayor que readiness para no reiniciarlo durante la inicialización.
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+      volumes:
+        - name: mongo-data          # Nombre local del volumen dentro del Pod.
+          persistentVolumeClaim:
+            claimName: mongo-pvc    # Vincula el Pod con el PVC de 01-mongo-pvc.yaml (aquí se logra la persistencia).
+---
+apiVersion: v1                      # API core/v1 para el recurso Service.
+kind: Service                       # Tipo de recurso: punto de acceso estable (IP virtual + nombre DNS).
+metadata:
+  name: mongo-service               # CoreDNS publicará este nombre: mongo-service.practica-s11.svc.cluster.local.
+  namespace: practica-s11
+  labels:
+    app: mongo
+    tier: database
+spec:
+  type: ClusterIP                   # Solo accesible dentro del clúster: MongoDB NO se expone al exterior.
+  selector:
+    app: mongo                      # Dirige el tráfico a los Pods con la etiqueta app=mongo.
+  ports:
+    - name: mongodb
+      protocol: TCP
+      port: 27017                   # Puerto del Service (el que usará el backend).
+      targetPort: mongodb           # Puerto del contenedor, referenciado por su nombre (27017).

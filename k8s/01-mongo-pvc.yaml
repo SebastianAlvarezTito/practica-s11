@@ -1,0 +1,16 @@
+
+apiVersion: v1                      # API core/v1: PersistentVolumeClaim pertenece al grupo core.
+kind: PersistentVolumeClaim         # Tipo de recurso: reclamo de volumen persistente.
+metadata:
+  name: mongo-pvc                   # Nombre exigido; el Deployment de MongoDB lo referencia por este nombre.
+  namespace: practica-s11           # Debe estar en el mismo namespace que el Pod que lo monta.
+  labels:
+    app: mongo                      # Etiqueta para localizar los recursos de la capa de datos.
+    tier: database                  # Capa arquitectónica: base de datos.
+spec:
+  accessModes:
+    - ReadWriteOnce                 # RWO: el volumen se monta en lectura/escritura por UN solo nodo a la vez.
+  resources:
+    requests:
+      storage: 1Gi                  # Capacidad solicitada: mínimo 1Gi según la rúbrica.
+  # storageClassName se omite a propósito: se usa el StorageClass por defecto de Minikube ("standard").
